@@ -1,5 +1,5 @@
 import { AIProvider, AIProviderType, AIResponse, UserAISettings, AIRequestContext } from './types';
-import { GeminiProvider, ChatGPTProvider } from './providers';
+import { GeminiProvider, ChatGPTProvider, FirebaseGeminiProvider } from './providers';
 
 /**
  * AI Service - Factory & Manager for AI Providers
@@ -21,15 +21,11 @@ export class AIService {
   configure(settings: UserAISettings): void {
     this.providers.clear();
 
-    // Initialize Gemini if key provided
-    if (settings.geminiApiKey) {
-      const gemini = new GeminiProvider(settings.geminiApiKey);
-      if (gemini.isConfigured) {
-        this.providers.set('gemini', gemini);
-      }
-    }
+    // Always add Firebase Gemini (secure, server-side)
+    const firebaseGemini = new FirebaseGeminiProvider();
+    this.providers.set('gemini', firebaseGemini);
 
-    // Initialize ChatGPT if key provided
+    // Initialize ChatGPT if key provided (client-side, user's own key)
     if (settings.chatgptApiKey) {
       const chatgpt = new ChatGPTProvider(settings.chatgptApiKey);
       if (chatgpt.isConfigured) {
@@ -37,8 +33,8 @@ export class AIService {
       }
     }
 
-    // Set preferred provider
-    this.preferredProvider = settings.preferredProvider || null;
+    // Set preferred provider (default to gemini for security)
+    this.preferredProvider = settings.preferredProvider || 'gemini';
   }
 
   /**

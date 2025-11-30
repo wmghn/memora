@@ -1,6 +1,7 @@
 import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
+import { GoogleGenAI, Type } from "@google/genai";
 
 admin.initializeApp();
 
@@ -174,3 +175,120 @@ export const createUserProfile = onCall(async (request: CallableRequest) => {
 
   return { success: true, isAdmin };
 });
+
+// ========================================
+// AI Enhancement Functions (Gemini)
+// ========================================
+
+interface AIEnhanceData {
+  text: string;
+  imageBase64?: string;
+}
+
+interface AIResponse {
+  title: string;
+  content: string;
+  tags: string[];
+}
+
+const MODEL_NAME = "gemini-2.5-flash";
+
+/**
+ * Callable function to enhance notes using Gemini AI
+ * This keeps the API key secure on the server side
+ */
+export const enhanceNoteWithAI = onCall(
+  { secrets: ["GEMINI_API_KEY"] },
+  async (request: CallableRequest<AIEnhanceData>): Promise<AIResponse> => {
+    const { data, auth } = request;
+
+    // Check if caller is authenticated
+    if (!auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Must be authenticated to use AI features"
+      );
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new HttpsError(
+        "failed-precondition",
+        "AI service is not configured"
+      );
+    }
+
+    const { text, imageBase64 } = data;
+
+    if (!text || typeof text !== "string") {
+      throw new HttpsError(
+        "invalid-argument",
+        "Must provide text to enhance"
+      );
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+
+      // Add image if available
+      if (imageBase64) {
+        const base64Data = imageBase64.split(",")[1] || imageBase64;
+        parts.push({
+          inlineData: {
+            mimeType: "image/jpeg",
+            data: base64Data,
+          },
+        });
+      }
+
+      // Add text prompt
+      const prompt = `
+        You are an expert tutor helper. The user has provided a note or a formula.
+
+        Task:
+        1. Analyze the text ${imageBase64 ? "and the provided image" : ""}.
+        2. If it is a formula, explain what it is, variables, and usage.
+        3. If it is a concept, summarize it clearly.
+        4. Format the output with clear Markdown (bolding, lists).
+        5. Suggest 3 relevant short tags.
+
+        Input text: "${text}"
+      `;
+      parts.push({ text: prompt });
+
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: { parts },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING, description: "A clear, concise title for this note" },
+              content: { type: Type.STRING, description: "The detailed explanation in Markdown format" },
+              tags: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "3 relevant tags",
+              },
+            },
+          },
+        },
+      });
+
+      const resultText = response.text;
+      if (!resultText) {
+        throw new HttpsError("internal", "No response from AI");
+      }
+
+      return JSON.parse(resultText) as AIResponse;
+    } catch (error) {
+      console.error("Gemini API Error:", error);
+      throw new HttpsError(
+        "internal",
+        "Failed to enhance note with AI"
+      );
+    }
+  }
+);
