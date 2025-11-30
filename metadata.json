@@ -1,0 +1,7 @@
+{
+  "name": "Memora - Kiến Thức Đọng Lại",
+  "description": "Ứng dụng thẻ ghi nhớ thông minh giúp lưu trữ công thức và kiến thức, hỗ trợ AI để giải thích và tóm tắt.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

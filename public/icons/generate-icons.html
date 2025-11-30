@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate PWA Icons</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; max-width: 800px; margin: 0 auto; }
+    .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; margin-top: 20px; }
+    .icon-item { text-align: center; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+    .icon-item img, .icon-item canvas { max-width: 100%; height: auto; }
+    button { padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
+    button:hover { background: #4338ca; }
+    h1 { color: #1e293b; }
+    p { color: #64748b; }
+    .download-all { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>PWA Icon Generator for Memora</h1>
+  <p>Click the button below to generate and download all required icon sizes.</p>
+
+  <button onclick="generateAllIcons()">Generate All Icons</button>
+  <button onclick="downloadAll()">Download All as ZIP</button>
+
+  <div class="icon-grid" id="iconGrid"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    const ICON_SIZES = [16, 32, 72, 96, 128, 144, 152, 167, 180, 192, 384, 512];
+    const SPLASH_SIZES = [
+      { width: 640, height: 1136, name: 'splash-640x1136' },
+      { width: 750, height: 1334, name: 'splash-750x1334' },
+      { width: 1242, height: 2208, name: 'splash-1242x2208' },
+      { width: 1125, height: 2436, name: 'splash-1125x2436' },
+      { width: 1170, height: 2532, name: 'splash-1170x2532' },
+    ];
+
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#6366f1"/>
+          <stop offset="100%" style="stop-color:#4f46e5"/>
+        </linearGradient>
+      </defs>
+      <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+      <g fill="white">
+        <path d="M128 120 C128 100, 145 85, 165 85 L240 85 L240 390 L165 390 C145 390, 128 375, 128 355 Z" opacity="0.9"/>
+        <path d="M272 85 L347 85 C367 85, 384 100, 384 120 L384 355 C384 375, 367 390, 347 390 L272 390 Z" opacity="0.9"/>
+        <rect x="240" y="85" width="32" height="305" rx="4" opacity="0.7"/>
+        <rect x="152" y="140" width="65" height="8" rx="4" fill="#4f46e5" opacity="0.4"/>
+        <rect x="152" y="170" width="55" height="8" rx="4" fill="#4f46e5" opacity="0.4"/>
+        <rect x="152" y="200" width="60" height="8" rx="4" fill="#4f46e5" opacity="0.4"/>
+        <rect x="295" y="140" width="65" height="8" rx="4" fill="#4f46e5" opacity="0.4"/>
+        <rect x="295" y="170" width="55" height="8" rx="4" fill="#4f46e5" opacity="0.4"/>
+        <rect x="295" y="200" width="60" height="8" rx="4" fill="#4f46e5" opacity="0.4"/>
+        <circle cx="380" cy="130" r="28" fill="#fbbf24"/>
+        <path d="M380 110 L383 125 L398 128 L383 131 L380 146 L377 131 L362 128 L377 125 Z" fill="white"/>
+      </g>
+    </svg>`;
+
+    const generatedIcons = [];
+
+    async function generateIcon(size) {
+      return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        const img = new Image();
+        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, size, size);
+          URL.revokeObjectURL(url);
+
+          canvas.toBlob((blob) => {
+            resolve({ size, blob, dataUrl: canvas.toDataURL('image/png') });
+          }, 'image/png');
+        };
+
+        img.src = url;
+      });
+    }
+
+    async function generateSplash(width, height, name) {
+      return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // Background gradient
+        const gradient = ctx.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, '#6366f1');
+        gradient.addColorStop(1, '#4f46e5');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        // Draw icon in center
+        const iconSize = Math.min(width, height) * 0.3;
+        const img = new Image();
+        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+
+        img.onload = () => {
+          const x = (width - iconSize) / 2;
+          const y = (height - iconSize) / 2;
+          ctx.drawImage(img, x, y, iconSize, iconSize);
+          URL.revokeObjectURL(url);
+
+          canvas.toBlob((blob) => {
+            resolve({ name, blob, dataUrl: canvas.toDataURL('image/png') });
+          }, 'image/png');
+        };
+
+        img.src = url;
+      });
+    }
+
+    async function generateAllIcons() {
+      const grid = document.getElementById('iconGrid');
+      grid.innerHTML = '<p>Generating icons...</p>';
+      generatedIcons.length = 0;
+
+      let html = '';
+
+      // Generate icon sizes
+      for (const size of ICON_SIZES) {
+        const result = await generateIcon(size);
+        generatedIcons.push({ name: `icon-${size}x${size}.png`, ...result });
+
+        html += `
+          <div class="icon-item">
+            <img src="${result.dataUrl}" alt="Icon ${size}x${size}" style="width: ${Math.min(size, 128)}px;">
+            <p>${size}x${size}</p>
+            <button onclick="downloadIcon('icon-${size}x${size}.png', '${result.dataUrl}')">Download</button>
+          </div>
+        `;
+      }
+
+      // Generate splash screens
+      for (const splash of SPLASH_SIZES) {
+        const result = await generateSplash(splash.width, splash.height, splash.name);
+        generatedIcons.push({ name: `${splash.name}.png`, ...result });
+
+        html += `
+          <div class="icon-item">
+            <img src="${result.dataUrl}" alt="${splash.name}" style="max-height: 200px;">
+            <p>${splash.name}</p>
+            <button onclick="downloadIcon('${splash.name}.png', '${result.dataUrl}')">Download</button>
+          </div>
+        `;
+      }
+
+      grid.innerHTML = html;
+    }
+
+    function downloadIcon(filename, dataUrl) {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      a.click();
+    }
+
+    async function downloadAll() {
+      if (generatedIcons.length === 0) {
+        await generateAllIcons();
+      }
+
+      const zip = new JSZip();
+
+      for (const icon of generatedIcons) {
+        zip.file(icon.name, icon.blob);
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(content);
+      a.download = 'memora-icons.zip';
+      a.click();
+    }
+
+    // Auto-generate on load
+    window.onload = generateAllIcons;
+  </script>
+</body>
+</html>
